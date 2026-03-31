@@ -217,7 +217,7 @@ async def handle_mood(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     await query.edit_message_text(
         f"✓ Stimmung: *{mood_labels.get(mood, mood)}*\n\n"
         "📝 *Hast du einen Storywunsch?*\n"
-        "z.B. _„Das Kind findet einen magischen Weg in einen Zauberwald…"_\n\n"
+        "z.B. _'Das Kind findet einen magischen Weg in einen Zauberwald...'_\n\n"
         "Schreib deinen Wunsch oder drück Überspringen.",
         reply_markup=keyboard,
         parse_mode="Markdown",
