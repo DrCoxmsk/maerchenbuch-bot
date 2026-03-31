@@ -246,7 +246,7 @@ async def _ask_dedication(message, ctx, edit=False):
     ])
     text = (
         "💌 *Möchtest du eine Widmung hinzufügen?*\n"
-        "z.B. _„Für Mia, zum 5. Geburtstag ♥"_\n\n"
+        "z.B. _'Für Mia, zum 5. Geburtstag ♥'_\n\n"
         "Schreib deine Widmung oder drück Überspringen."
     )
     if edit:
