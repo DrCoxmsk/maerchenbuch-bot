@@ -107,7 +107,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    """Empfängt die Zeichnung und fragt nach dem Kindesnamen."""
+    """Empfängt die Zeichnung, moderiert sie und fragt nach dem Kindesnamen."""
     order = ctx.user_data.get("order")
     if not order:
         order = new_order(update.effective_user.id)
@@ -118,9 +118,23 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     file = await photo.get_file()
     save_path = os.path.join(order["work_dir"], "zeichnung.jpg")
     await file.download_to_drive(save_path)
-    order["drawing_path"] = save_path
 
     logger.info(f"Zeichnung empfangen: {save_path} ({photo.width}x{photo.height})")
+
+    # Bildmoderation
+    loop = asyncio.get_event_loop()
+    mod = await loop.run_in_executor(None, pipeline.moderate_image, save_path)
+    logger.info(f"Moderation: {mod}")
+    if not mod.get("ist_kinderzeichnung", False) or mod.get("konfidenz", 0) < 0.55:
+        await update.message.reply_text(
+            "Das sieht leider nicht wie eine Kinderzeichnung aus 🎨\n\n"
+            "Bitte schick mir ein Foto oder einen Scan einer echten Kinderzeichnung – "
+            "Strichmännchen, bunte Malereien oder wilde Kritzeleien sind perfekt!\n\n"
+            "Einfach ein neues Bild schicken."
+        )
+        return PHOTO
+
+    order["drawing_path"] = save_path
 
     await update.message.reply_text(
         "🎨 Schöne Zeichnung! Jetzt brauche ich ein paar Angaben.\n\n"
@@ -325,13 +339,35 @@ async def handle_consent(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         parse_mode="Markdown",
     )
 
-    # Referenzbilder in Background generieren
+    # Referenzbilder generieren
     try:
+        # Spoiler-Nachricht sofort senden
+        spoiler_msg = await ctx.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=(
+                "✨ *Dein Buch wird vorbereitet…*\n\n"
+                "||🎨 Illustrationsstil 1 wird generiert…\n"
+                "🎨 Illustrationsstil 2 wird generiert…\n"
+                "🎨 Illustrationsstil 3 wird generiert…\n\n"
+                "Tipp: Tippe auf den grauen Balken um die Vorschau zu sehen sobald sie fertig ist\\!||"
+            ),
+            parse_mode="MarkdownV2",
+        )
+
         chars = pipeline.analyze_drawing(order)
         ctx.user_data["chars"] = chars
 
         ref_paths = pipeline.generate_reference_images(order, chars)
         ctx.user_data["ref_paths"] = ref_paths
+
+        # Spoiler-Nachricht löschen
+        try:
+            await ctx.bot.delete_message(
+                chat_id=query.message.chat_id,
+                message_id=spoiler_msg.message_id,
+            )
+        except Exception:
+            pass
 
         # Referenzbilder senden
         for i, path in enumerate(ref_paths):

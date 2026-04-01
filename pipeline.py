@@ -29,6 +29,7 @@ import random
 import base64
 import shutil
 import time
+import datetime
 from pathlib import Path
 
 from openai import OpenAI
@@ -71,6 +72,53 @@ def ensure_fonts():
 
 def get_client() -> OpenAI:
     return OpenAI(api_key=OPENAI_API_KEY)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BILDMODERATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+MODERATION_PROMPT = """
+Analysiere dieses Bild. Antworte NUR als JSON, kein Text davor/danach:
+{
+  "ist_kinderzeichnung": true/false,
+  "konfidenz": 0.0-1.0,
+  "ablehnungsgrund": null | "kein_bild_einer_zeichnung" | "foto_statt_zeichnung" | "unangemessener_inhalt" | "text_dokument"
+}
+Akzeptiere: Kinderzeichnungen, Malereien, Strichmännchen, Kritzeleien,
+abstrakte Zeichnungen. Im Zweifel akzeptieren (konfidenz >= 0.55 reicht).
+Lehne ab bei: echten Fotos von Menschen, erotischen Inhalten,
+Körperteilen, Text/Dokumenten, Screenshots.
+"""
+
+
+def moderate_image(drawing_path: str) -> dict:
+    """GPT-4o Vision moderiert das Bild. Gibt Moderations-Dict zurück."""
+    try:
+        client = get_client()
+        img_b64 = base64.b64encode(Path(drawing_path).read_bytes()).decode()
+        ext = Path(drawing_path).suffix.lower()
+        mime = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
+
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": MODERATION_PROMPT},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+                ]
+            }],
+            max_tokens=200,
+        )
+
+        raw = resp.choices[0].message.content
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        return json.loads(raw[start:end])
+    except Exception as e:
+        print(f"[pipeline] Moderation Fehler: {e}")
+        return {"ist_kinderzeichnung": True, "konfidenz": 1.0, "ablehnungsgrund": None}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -461,6 +509,12 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
                 c.line(x + xo, y, x + dx, y)
                 c.line(x, y + yo, x, y + dy)
 
+    def draw_vorsatz():
+        cv.setFillColor(HexColor('#FFFFFF'))
+        cv.rect(0, 0, PW, PH, fill=1, stroke=0)
+        crop_marks(cv)
+        cv.showPage()
+
     def text_area(c, text, pagenum=None):
         ty = PH - IH - 8
         c.setFillColor(CBG)
@@ -484,10 +538,13 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
             c.setFont(FI, 10)
             c.drawCentredString(PW / 2, M, f"· {pagenum} ·")
 
-    # ── Cover ────────────────────────────────────────────────────────────────
+    # ── Vorsatz vorne (Seite 1–2) ────────────────────────────────────────────
     cv = rl_canvas.Canvas(pdf_path, pagesize=(PW, PH))
     cv.setTitle(f"{child}s Märchenbuch")
+    draw_vorsatz()
+    draw_vorsatz()
 
+    # ── Cover (Seite 3) ──────────────────────────────────────────────────────
     cover_img = image_paths[0] if image_paths else None
     if cover_img and os.path.exists(cover_img):
         cv.drawImage(cover_img, 0, 0, width=PW, height=PH,
@@ -589,6 +646,38 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
     cv.drawCentredString(PW / 2, M + 8, "Personalisiertes Märchenbuch")
     crop_marks(cv)
     cv.showPage()
+
+    # ── Impressum (Seite 16) ─────────────────────────────────────────────────
+    today = datetime.date.today().strftime("%d.%m.%Y")
+    cv.setFillColor(CBG)
+    cv.rect(0, 0, PW, PH, fill=1, stroke=0)
+    imp_lines = [
+        ("Erstellt mit Malory.", FT, 16, HexColor('#2A0A1A')),
+        ("Kinderzeichnungen werden Märchen.", FI, 13, HexColor('#443344')),
+        ("", FB, 12, HexColor('#FFFFFF')),
+        ("Illustrationen: KI-generiert auf Basis der eingereichten Kinderzeichnung", FB, 11, HexColor('#666666')),
+        (f"Text: KI-generiert \u00b7 Personalisiert für {child}", FB, 11, HexColor('#666666')),
+        (f"PDF erstellt: {today}", FB, 11, HexColor('#666666')),
+    ]
+    y = PH / 2 + 60
+    for line_text, line_font, line_size, line_color in imp_lines:
+        cv.setFont(line_font, line_size)
+        cv.setFillColor(line_color)
+        if line_text:
+            cv.drawCentredString(PW / 2, y, line_text)
+        y -= line_size + 12
+    cv.setFont(FB, 8)
+    cv.setFillColor(HexColor('#AAAAAA'))
+    cv.drawCentredString(
+        PW / 2, M + 20,
+        "Die eingereichte Zeichnung wird nach 30 Tagen automatisch gelöscht.",
+    )
+    crop_marks(cv)
+    cv.showPage()
+
+    # ── Nachsatz (Seite 17–18) ───────────────────────────────────────────────
+    draw_vorsatz()
+    draw_vorsatz()
 
     cv.save()
     return pdf_path
