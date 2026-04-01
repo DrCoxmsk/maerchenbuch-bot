@@ -442,7 +442,7 @@ async def handle_ref_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
                     document=InputFile(f, filename=f"{child}s_Maerchenbuch.pdf"),
                     caption=(
                         f"📚 *{child}s Märchenbuch ist fertig!* 🎉\n\n"
-                        f"13 Seiten · A4 druckfertig · mit Schnittmarken\n\n"
+                        f"20 Seiten · A4 druckfertig · mit Schnittmarken\n\n"
                         f"Viel Freude damit! Schick /start für ein neues Buch."
                     ),
                     parse_mode="Markdown",

@@ -55,6 +55,8 @@ LANG_MAP = {
 FONT_DIR = Path("fonts")
 FONT_DIR.mkdir(exist_ok=True)
 
+LOGO_PATH = Path(__file__).parent / "malory.PNG"
+
 SYSTEM_FONTS = {
     "Baloo2-Bold.ttf":  "/usr/share/fonts/truetype/google-fonts/Poppins-Bold.ttf",
     "Lora-Regular.ttf": "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
@@ -515,6 +517,19 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
         crop_marks(cv)
         cv.showPage()
 
+    def draw_logo_page():
+        cv.setFillColor(CBG)
+        cv.rect(0, 0, PW, PH, fill=1, stroke=0)
+        if LOGO_PATH.exists():
+            logo_w = 180
+            logo_x = (PW - logo_w) / 2
+            logo_y = (PH - logo_w) / 2
+            cv.drawImage(str(LOGO_PATH), logo_x, logo_y,
+                         width=logo_w, height=logo_w,
+                         preserveAspectRatio=True, mask='auto')
+        crop_marks(cv)
+        cv.showPage()
+
     def text_area(c, text, pagenum=None):
         ty = PH - IH - 8
         c.setFillColor(CBG)
@@ -566,6 +581,9 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
     cv.drawCentredString(PW / 2, by + bh / 2 - 9, f"{child}s Märchenbuch")
     crop_marks(cv)
     cv.showPage()
+
+    # ── Vorsatz mit Logo (Seite 4) ───────────────────────────────────────────
+    draw_logo_page()
 
     # ── Widmungsseite ────────────────────────────────────────────────────────
     cv.setFillColor(CBG)
@@ -647,7 +665,10 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
     crop_marks(cv)
     cv.showPage()
 
-    # ── Impressum (Seite 16) ─────────────────────────────────────────────────
+    # ── Nachsatz mit Logo (Seite 17) ─────────────────────────────────────────
+    draw_logo_page()
+
+    # ── Impressum (Seite 18) ─────────────────────────────────────────────────
     today = datetime.date.today().strftime("%d.%m.%Y")
     cv.setFillColor(CBG)
     cv.rect(0, 0, PW, PH, fill=1, stroke=0)
@@ -675,7 +696,7 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
     crop_marks(cv)
     cv.showPage()
 
-    # ── Nachsatz (Seite 17–18) ───────────────────────────────────────────────
+    # ── Nachsatz (Seite 19–20) ───────────────────────────────────────────────
     draw_vorsatz()
     draw_vorsatz()
 
