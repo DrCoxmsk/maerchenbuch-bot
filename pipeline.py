@@ -518,12 +518,12 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
         cv.showPage()
 
     def draw_logo_page():
-        cv.setFillColor(CBG)
+        cv.setFillColor(HexColor('#F9F9F4'))
         cv.rect(0, 0, PW, PH, fill=1, stroke=0)
         if LOGO_PATH.exists():
-            logo_w = 180
+            logo_w = 380
             logo_x = (PW - logo_w) / 2
-            logo_y = (PH - logo_w) / 2
+            logo_y = (PH - logo_w) / 2 + 10
             cv.drawImage(str(LOGO_PATH), logo_x, logo_y,
                          width=logo_w, height=logo_w,
                          preserveAspectRatio=True, mask='auto')
@@ -553,13 +553,9 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
             c.setFont(FI, 10)
             c.drawCentredString(PW / 2, M, f"· {pagenum} ·")
 
-    # ── Vorsatz vorne (Seite 1–2) ────────────────────────────────────────────
+    # ── Cover (Seite 1) ──────────────────────────────────────────────────────
     cv = rl_canvas.Canvas(pdf_path, pagesize=(PW, PH))
     cv.setTitle(f"{child}s Märchenbuch")
-    draw_vorsatz()
-    draw_vorsatz()
-
-    # ── Cover (Seite 3) ──────────────────────────────────────────────────────
     cover_img = image_paths[0] if image_paths else None
     if cover_img and os.path.exists(cover_img):
         cv.drawImage(cover_img, 0, 0, width=PW, height=PH,
@@ -582,10 +578,10 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
     crop_marks(cv)
     cv.showPage()
 
-    # ── Vorsatz mit Logo (Seite 4) ───────────────────────────────────────────
+    # ── Logo-Seite (Seite 2) ─────────────────────────────────────────────────
     draw_logo_page()
 
-    # ── Widmungsseite ────────────────────────────────────────────────────────
+    # ── Widmungsseite (Seite 3) ──────────────────────────────────────────────
     cv.setFillColor(CBG)
     cv.rect(0, 0, PW, PH, fill=1, stroke=0)
     cv.setStrokeColor(CAC)
@@ -665,10 +661,10 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
     crop_marks(cv)
     cv.showPage()
 
-    # ── Nachsatz mit Logo (Seite 17) ─────────────────────────────────────────
+    # ── Logo-Seite (Seite 15) ────────────────────────────────────────────────
     draw_logo_page()
 
-    # ── Impressum (Seite 18) ─────────────────────────────────────────────────
+    # ── Impressum (Seite 16) ─────────────────────────────────────────────────
     today = datetime.date.today().strftime("%d.%m.%Y")
     cv.setFillColor(CBG)
     cv.rect(0, 0, PW, PH, fill=1, stroke=0)
@@ -695,10 +691,6 @@ def build_pdf(order: dict, story_pages: list[str], image_paths: list[str]) -> st
     )
     crop_marks(cv)
     cv.showPage()
-
-    # ── Nachsatz (Seite 19–20) ───────────────────────────────────────────────
-    draw_vorsatz()
-    draw_vorsatz()
 
     cv.save()
     return pdf_path
