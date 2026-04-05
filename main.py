@@ -36,6 +36,7 @@ from telegram.ext import (
 )
 
 import pipeline
+import db
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -46,6 +47,7 @@ logger = logging.getLogger("maerchenbuch")
 
 # ── Secrets ──────────────────────────────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+ADMIN_TELEGRAM_ID = int(os.environ.get("ADMIN_TELEGRAM_ID", "0"))
 WORK_BASE = Path("orders")
 WORK_BASE.mkdir(exist_ok=True)
 
@@ -94,7 +96,21 @@ def new_order(user_id: int) -> dict:
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Begrüßung und Aufforderung zum Zeichnungs-Upload."""
-    ctx.user_data["order"] = new_order(update.effective_user.id)
+    user_id = update.effective_user.id
+
+    # Limit-Check (Admin ist ausgenommen)
+    if user_id != ADMIN_TELEGRAM_ID and db.is_limit_reached(user_id):
+        await update.message.reply_text(
+            "Vielen Dank, dass du Malory getestet hast! \U0001f389\n\n"
+            "Du hast deine 3 kostenlosen Beta-Bücher erstellt. "
+            "Wir sind mega gespannt auf dein Feedback:\n\n"
+            "Was hat dir gefallen? Was können wir verbessern?\n\n"
+            "\u2709\ufe0f hallo@malory.org\n"
+            "\U0001f4ac Oder schreib uns einfach hier im Chat!"
+        )
+        return ConversationHandler.END
+
+    ctx.user_data["order"] = new_order(user_id)
 
     await update.message.reply_text(
         "✨ *Willkommen beim Märchenbuch-Bot!*\n\n"
@@ -437,6 +453,20 @@ async def handle_ref_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
 
         if pdf_path and os.path.exists(pdf_path):
             child = order["child_name"]
+            user_id = order["user_id"]
+
+            # Zähler erhöhen (Admin wird nicht gezählt)
+            remaining = None
+            if user_id != ADMIN_TELEGRAM_ID:
+                new_count = db.increment_generation(user_id)
+                remaining = db.MAX_GENERATIONS - new_count
+
+            remaining_hint = (
+                f"\n\n_{remaining} Beta-Buchgenerierung{'en' if remaining != 1 else ''} übrig._"
+                if remaining is not None and remaining > 0
+                else ""
+            )
+
             with open(pdf_path, "rb") as f:
                 await query.message.reply_document(
                     document=InputFile(f, filename=f"{child}s_Maerchenbuch.pdf"),
@@ -444,6 +474,7 @@ async def handle_ref_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
                         f"📚 *{child}s Märchenbuch ist fertig!* 🎉\n\n"
                         f"16 Seiten · A4 druckfertig · mit Schnittmarken\n\n"
                         f"Viel Freude damit! Schick /start für ein neues Buch."
+                        f"{remaining_hint}"
                     ),
                     parse_mode="Markdown",
                 )
@@ -501,6 +532,9 @@ def main():
         print("⚠️  OPENAI_API_KEY nicht gesetzt!")
         print("   Setze den Key als Replit Secret.")
         return
+
+    # Datenbank initialisieren
+    db.init_db()
 
     # Bot aufbauen
     app = Application.builder().token(TELEGRAM_TOKEN).build()
